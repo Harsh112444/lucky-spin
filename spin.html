@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Spin & Win</title>
+
+<style>
+body{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    background:radial-gradient(circle at top,#444,#111);
+    font-family:Arial, sans-serif;
+}
+
+/* ===== WHEEL ===== */
+.wheel-container{
+    position:relative;
+    width:360px;
+    height:360px;
+    text-align:center;
+    filter:drop-shadow(0 15px 35px rgba(0,0,0,.8));
+}
+
+/* Glow ring */
+.wheel-container::before{
+    content:"";
+    position:absolute;
+    inset:-12px;
+    border-radius:50%;
+    box-shadow:
+        0 0 20px rgba(255,193,7,.7),
+        0 0 50px rgba(255,193,7,.4);
+    z-index:0;
+}
+
+/* Pointer */
+.pointer{
+    position:absolute;
+    top:-8px;
+    left:50%;
+    transform:translateX(-50%);
+    width:0;height:0;
+    border-left:18px solid transparent;
+    border-right:18px solid transparent;
+    border-bottom:36px solid #ff1744;
+    filter:drop-shadow(0 0 6px #ff1744);
+    z-index:10;
+}
+
+/* Pointer pulse when spinning */
+.spinning .pointer{
+    animation:pulse .5s infinite alternate;
+}
+
+@keyframes pulse{
+    from{filter:drop-shadow(0 0 4px #ff1744)}
+    to{filter:drop-shadow(0 0 12px #ff5252)}
+}
+
+canvas{
+    position:relative;
+    border-radius:50%;
+    background:radial-gradient(circle at top,#555,#222);
+    box-shadow:
+        inset 0 0 25px rgba(0,0,0,.8),
+        inset 0 -10px 30px rgba(255,255,255,.15);
+    z-index:2;
+}
+
+/* ===== BUTTON ===== */
+button{
+    margin-top:22px;
+    padding:14px 36px;
+    font-size:18px;
+    font-weight:bold;
+    background:linear-gradient(#ff7043,#ff5722);
+    color:#fff;
+    border:none;
+    border-radius:50px;
+    cursor:pointer;
+    box-shadow:
+        0 6px 0 #d84315,
+        0 14px 25px rgba(0,0,0,.6);
+    transition:.15s;
+}
+
+button:hover{
+    box-shadow:
+        0 6px 0 #d84315,
+        0 0 20px rgba(255,87,34,.8);
+}
+
+button:active{
+    transform:translateY(4px);
+    box-shadow:
+        0 2px 0 #d84315,
+        0 6px 15px rgba(0,0,0,.6);
+}
+</style>
+</head>
+
+<body>
+
+<div class="wheel-container" id="box">
+    <div class="pointer"></div>
+    <canvas id="wheel" width="360" height="360"></canvas>
+    <button onclick="spinWheel()">SPIN</button>
+</div>
+
+<audio id="tick" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-mechanical-bling-210.wav"></audio>
+
+<script>
+/* ================= SEGMENTS ================= */
+const segments = [
+    "Free Coke","",
+    "Extra 5% Off","",
+    "Extra 10% Off","",
+    "","","",""
+];
+
+const colors = [
+    "#ff1744",   // Free Coke – bright red
+    "#ffea00",   // blank – neon yellow
+    "#00e5ff",   // 5% Off – cyan
+    "#ff9100",   // blank – bright orange
+    "#1de9b6",   // 10% Off – mint
+    "#d500f9",   // blank – purple
+    "#2979ff",   // blank – electric blue
+    "#76ff03",   // blank – neon green
+    "#f50057",   // blank – pink
+    "#ffc400"    // blank – gold yellow
+];
+
+
+/* ================= FIXED PROBABILITY ================= */
+const probability = { loss:70, off5:20, off10:8, free:2 };
+
+function decidePrize(){
+    const r=Math.random()*100;
+    if(r<probability.loss) return "";
+    if(r<probability.loss+probability.off5) return "Extra 5% Off";
+    if(r<probability.loss+probability.off5+probability.off10) return "Extra 10% Off";
+    return "Free Coke";
+}
+
+/* ================= CANVAS ================= */
+const canvas=wheel;
+const ctx=canvas.getContext("2d");
+const C=180,R=170;
+const arc=2*Math.PI/segments.length;
+
+let rotation=0,spinning=false,lastTick=-1;
+const tick=document.getElementById("tick");
+const box=document.getElementById("box");
+
+/* ================= DRAW ================= */
+function draw(){
+    ctx.clearRect(0,0,360,360);
+
+    segments.forEach((txt,i)=>{
+        const ang=rotation+i*arc;
+        ctx.beginPath();
+        ctx.moveTo(C,C);
+        ctx.arc(C,C,R,ang,ang+arc);
+        ctx.fillStyle=colors[i];
+        ctx.fill();
+
+        if(txt){
+            ctx.save();
+            ctx.translate(C,C);
+            ctx.rotate(ang+arc/2);
+            ctx.fillStyle="#fff";
+            ctx.shadowColor="#000";
+            ctx.shadowBlur=6;
+            ctx.font="bold 16px Arial";
+            ctx.textAlign="right";
+            ctx.fillText(txt,R-20,6);
+            ctx.restore();
+        }
+    });
+
+    ctx.beginPath();
+    ctx.arc(C,C,42,0,2*Math.PI);
+    ctx.fillStyle="#fff";
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle="#ff5722";
+    ctx.font="bold 18px Arial";
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillText("SPIN",C,C);
+}
+draw();
+
+/* ================= SPIN ================= */
+function spinWheel(){
+    if(spinning) return;
+    spinning=true;
+    box.classList.add("spinning");
+
+    const prize=decidePrize();
+    const idxs=segments.map((v,i)=>v===prize?i:null).filter(v=>v!==null);
+    const index=idxs[Math.floor(Math.random()*idxs.length)];
+
+    const target=
+        rotation - 5*2*Math.PI
+        - ((index*arc+arc/2)-1.5*Math.PI);
+
+    const start=performance.now(), dur=6000, startRot=rotation;
+
+    function anim(t){
+        const p=Math.min((t-start)/dur,1);
+        rotation=startRot+(1-Math.pow(1-p,3))*(target-startRot);
+
+        const ti=Math.floor(((rotation%(2*Math.PI))+2*Math.PI)/arc);
+        if(ti!==lastTick){
+            tick.currentTime=0;
+            tick.play();
+            lastTick=ti;
+        }
+
+        draw();
+        if(p<1) requestAnimationFrame(anim);
+        else{
+            spinning=false;
+            box.classList.remove("spinning");
+        }
+    }
+    requestAnimationFrame(anim);
+}
+</script>
+
+</body>
+</html>
